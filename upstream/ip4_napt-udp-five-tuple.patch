@@ -1,0 +1,46 @@
+--- upstream/ip4_napt-fa4dffdf.c.txt
++++ ESP32_S3/ip4_napt_udp_fix.c
+@@ -559,10 +559,42 @@
+   return NULL;
+ }
+ 
++/*
++ * Project-local fix: one client UDP socket may communicate with several peers.
++ * The upstream source-only lookup overwrites the previous peer on every send,
++ * while receive lookup still requires that peer. Retain a separate mapping for
++ * each UDP five-tuple; the existing allocator assigns collision-free ports.
++ * TCP, ICMP, inbound filtering, table limits, and timeouts remain unchanged.
++ */
++#if LWIP_UDP
++static struct ip_napt_entry *
++ip_napt_find_udp_outbound(u32_t src, u16_t sport, u32_t dest, u16_t dport)
++{
++  u16_t i;
++  for (i = napt_list; i != NO_IDX; i = NT(i)->next) {
++    struct ip_napt_entry *t = NT(i);
++    if (t->proto == IP_PROTO_UDP && t->src == src && t->sport == sport &&
++        t->dest == dest && t->dport == dport) {
++      t->last = sys_now();
++      return t;
++    }
++  }
++  return NULL;
++}
++#endif /* LWIP_UDP */
++
+ static u16_t
+ ip_napt_add(u8_t proto, u32_t src, u16_t sport, u32_t dest, u16_t dport, u32_t seqno)
+ {
+-  struct ip_napt_entry *t = ip_napt_find(proto, src, sport, 0, 0);
++  struct ip_napt_entry *t;
++#if LWIP_UDP
++  if (proto == IP_PROTO_UDP) {
++    t = ip_napt_find_udp_outbound(src, sport, dest, dport);
++  } else
++#endif /* LWIP_UDP */
++  {
++    t = ip_napt_find(proto, src, sport, 0, 0);
++  }
+   if (t) {
+     t->last = sys_now();
+     t->dest = dest;

@@ -1,0 +1,11 @@
+ESP32_S3/config_private.h
+build/
+.build-tmp/
+__pycache__/
+.idea/
+.vscode/
+*.bin
+*.elf
+*.map
+*.log
+.private-wifi-profile.xml
